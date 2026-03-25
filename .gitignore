@@ -1,0 +1,45 @@
+# Godot
+.godot/
+*.import
+export_presets.cfg
+
+# Build artifacts
+*.os
+*.o
+*.dylib
+*.so
+*.dll
+*.framework
+*.a
+*.lib
+bin/
+
+# godot-cpp (cloned separately, not committed)
+godot-cpp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Large cloned repos (reference only, not committed)
+nvidia-godot-rtx/
+oidn/
+Blast/
+Motion-Matching/
+LabSound/
+godot-steam-audio/
+
+# Temporary
+*.log
+*.tmp
+/tmp/
+*.dblite

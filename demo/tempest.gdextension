@@ -1,0 +1,9 @@
+[configuration]
+
+entry_symbol = "tempest_library_init"
+compatibility_minimum = "4.2"
+
+[libraries]
+
+macos.debug = "res://bin/libtempest.macos.template_debug.universal.dylib"
+macos.release = "res://bin/libtempest.macos.template_debug.universal.dylib"

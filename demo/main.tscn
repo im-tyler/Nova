@@ -1,0 +1,335 @@
+[gd_scene load_steps=10 format=3 uid="uid://parity_demo_main"]
+
+[sub_resource type="GDScript" id="GDScript_main"]
+script/source = "extends Node3D
+
+# ============================================================
+# Godot-Unreal Parity Initiative -- Full Demo
+# ============================================================
+# Demonstrates all Cascade systems (Cloth, Fluid, Fracture),
+# alongside GDScript plugin integrations (Scatter, Resonance,
+# Kinetic) in a single unified scene.
+
+var orbit_angle := 0.0
+var orbit_speed := 0.15
+var orbit_radius := 14.0
+var orbit_height := 5.0
+var fps_timer := 0.0
+
+var cascade_cloth_available := false
+var cascade_fluid_available := false
+var cascade_fracture_available := false
+var tempest_available := false
+
+func _ready() -> void:
+	print('')
+	print('==========================================================')
+	print('  Godot-Unreal Parity Initiative -- Full Demo')
+	print('==========================================================')
+	print('')
+
+	# ----------------------------------------------------------
+	# Detect available systems
+	# ----------------------------------------------------------
+	var systems: Array[Dictionary] = []
+
+	# GDExtension classes (Cascade physics)
+	cascade_cloth_available = ClassDB.class_exists(&'CascadeCloth')
+	cascade_fluid_available = ClassDB.class_exists(&'CascadeFluid')
+	cascade_fracture_available = ClassDB.class_exists(&'CascadeFracture')
+	tempest_available = ClassDB.class_exists(&'TempestEmitter') or ClassDB.class_exists(&'TempestParticleSystem')
+
+	systems.append({'name': 'Cascade Cloth',    'status': 'LOADED' if cascade_cloth_available else 'NOT FOUND'})
+	systems.append({'name': 'Cascade Fluid',    'status': 'LOADED' if cascade_fluid_available else 'NOT FOUND'})
+	systems.append({'name': 'Cascade Fracture', 'status': 'LOADED' if cascade_fracture_available else 'NOT FOUND'})
+	systems.append({'name': 'Tempest VFX',      'status': 'LOADED' if tempest_available else 'NOT FOUND'})
+
+	# GDScript plugins (check for plugin scripts)
+	var scatter_ok := ResourceLoader.exists('res://addons/scatter/scatter_plugin.gd')
+	var resonance_ok := ResourceLoader.exists('res://addons/resonance/resonance_plugin.gd')
+	var kinetic_ok := ResourceLoader.exists('res://addons/kinetic/kinetic_plugin.gd')
+
+	systems.append({'name': 'Scatter (PCG)',     'status': 'LOADED' if scatter_ok else 'NOT FOUND'})
+	systems.append({'name': 'Resonance (Audio)', 'status': 'LOADED' if resonance_ok else 'NOT FOUND'})
+	systems.append({'name': 'Kinetic (Motion)',  'status': 'LOADED' if kinetic_ok else 'NOT FOUND'})
+
+	print('  Systems:')
+	for s in systems:
+		var mark := '  [+]' if s['status'] == 'LOADED' else '  [-]'
+		print('    %s %s  ...  %s' % [mark, s['name'], s['status']])
+	print('')
+	print('==========================================================')
+	print('')
+
+	# ----------------------------------------------------------
+	# Build the scene
+	# ----------------------------------------------------------
+	_build_environment()
+	_build_ground()
+	_build_cascade_cloth()
+	_build_cascade_fluid()
+	_build_cascade_fracture()
+	_build_camera()
+
+func _build_environment() -> void:
+	# WorldEnvironment
+	var env := WorldEnvironment.new()
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.bg_color = Color(0.05, 0.05, 0.08)
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color(0.12, 0.12, 0.18)
+	environment.ambient_light_energy = 0.4
+	environment.tonemap_mode = Environment.TONE_MAP_ACES
+	environment.glow_enabled = true
+	environment.glow_intensity = 0.3
+	environment.glow_bloom = 0.1
+	env.environment = environment
+	add_child(env)
+
+	# Key light (warm, top-right-front)
+	var key := DirectionalLight3D.new()
+	key.light_color = Color(1.0, 0.95, 0.85)
+	key.light_energy = 1.4
+	key.shadow_enabled = true
+	key.rotation_degrees = Vector3(-45, -30, 0)
+	add_child(key)
+
+	# Fill light (cool, left side)
+	var fill := DirectionalLight3D.new()
+	fill.light_color = Color(0.6, 0.7, 1.0)
+	fill.light_energy = 0.5
+	fill.shadow_enabled = false
+	fill.rotation_degrees = Vector3(-20, 150, 0)
+	add_child(fill)
+
+	# Rim/back light
+	var rim := DirectionalLight3D.new()
+	rim.light_color = Color(0.8, 0.85, 1.0)
+	rim.light_energy = 0.6
+	rim.shadow_enabled = false
+	rim.rotation_degrees = Vector3(-10, 180, 0)
+	add_child(rim)
+
+func _build_ground() -> void:
+	var body := StaticBody3D.new()
+	body.name = 'Ground'
+
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(30, 0.2, 30)
+	collision.shape = shape
+	body.add_child(collision)
+
+	var mesh_inst := MeshInstance3D.new()
+	var box_mesh := BoxMesh.new()
+	box_mesh.size = Vector3(30, 0.2, 30)
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.15, 0.15, 0.18)
+	material.metallic = 0.1
+	material.roughness = 0.85
+	box_mesh.material = material
+	mesh_inst.mesh = box_mesh
+	body.add_child(mesh_inst)
+
+	body.position = Vector3(0, -0.1, 0)
+	add_child(body)
+
+func _build_cascade_cloth() -> void:
+	# Left side -- red cloth simulation
+	if cascade_cloth_available:
+		var cloth = ClassDB.instantiate(&'CascadeCloth')
+		if cloth:
+			cloth.name = 'DemoCloth'
+			cloth.position = Vector3(-5, 3, 0)
+			# Attempt to set properties if they exist
+			if cloth.has_method('set_color') or 'color' in cloth:
+				cloth.set('color', Color(0.9, 0.15, 0.1))
+			if 'pin_top' in cloth:
+				cloth.set('pin_top', true)
+			if 'wind' in cloth:
+				cloth.set('wind', Vector3(2.0, 0, 0.5))
+			if 'size' in cloth:
+				cloth.set('size', Vector2(3, 4))
+			add_child(cloth)
+			print('  Cascade Cloth instantiated (red, top-pinned, wind)')
+	else:
+		# Placeholder red panel
+		var placeholder := _make_placeholder(
+			Vector3(-5, 3, 0),
+			Color(0.9, 0.15, 0.1, 0.6),
+			'ClothPlaceholder'
+		)
+		add_child(placeholder)
+		print('  Cascade Cloth not available -- placeholder shown')
+
+func _build_cascade_fluid() -> void:
+	# Center -- blue fluid simulation
+	if cascade_fluid_available:
+		var fluid = ClassDB.instantiate(&'CascadeFluid')
+		if fluid:
+			fluid.name = 'DemoFluid'
+			fluid.position = Vector3(0, 1, 0)
+			if 'color' in fluid:
+				fluid.set('color', Color(0.1, 0.3, 0.9))
+			if 'particle_count' in fluid:
+				fluid.set('particle_count', 2048)
+			if 'domain_size' in fluid:
+				fluid.set('domain_size', Vector3(4, 3, 4))
+			add_child(fluid)
+			print('  Cascade Fluid instantiated (blue, 2048 particles)')
+	else:
+		var placeholder := _make_placeholder(
+			Vector3(0, 1.5, 0),
+			Color(0.1, 0.3, 0.9, 0.6),
+			'FluidPlaceholder'
+		)
+		add_child(placeholder)
+		print('  Cascade Fluid not available -- placeholder shown')
+
+func _build_cascade_fracture() -> void:
+	# Right side -- gold box that shatters after 4 seconds
+	if cascade_fracture_available:
+		var fracture = ClassDB.instantiate(&'CascadeFracture')
+		if fracture:
+			fracture.name = 'DemoFracture'
+			fracture.position = Vector3(5, 2, 0)
+			if 'color' in fracture:
+				fracture.set('color', Color(0.85, 0.65, 0.1))
+			if 'size' in fracture:
+				fracture.set('size', Vector3(2, 2, 2))
+			add_child(fracture)
+			# Schedule fracture after 4 seconds
+			var timer := Timer.new()
+			timer.wait_time = 4.0
+			timer.one_shot = true
+			timer.timeout.connect(func():
+				if fracture and is_instance_valid(fracture):
+					if fracture.has_method('fracture'):
+						fracture.fracture()
+						print('  Fracture triggered!')
+					elif fracture.has_method('shatter'):
+						fracture.shatter()
+						print('  Shatter triggered!')
+			)
+			add_child(timer)
+			timer.start()
+			print('  Cascade Fracture instantiated (gold box, shatters in 4s)')
+	else:
+		var placeholder := _make_placeholder(
+			Vector3(5, 2, 0),
+			Color(0.85, 0.65, 0.1, 0.6),
+			'FracturePlaceholder'
+		)
+		add_child(placeholder)
+		# Add a timer to simulate the shatter visually
+		var timer := Timer.new()
+		timer.wait_time = 4.0
+		timer.one_shot = true
+		timer.timeout.connect(func():
+			if placeholder and is_instance_valid(placeholder):
+				var tween := create_tween()
+				tween.tween_property(placeholder, 'scale', Vector3(1.5, 0.1, 1.5), 0.4)
+				tween.tween_callback(placeholder.queue_free)
+				print('  Fracture placeholder collapsed (simulated)')
+		)
+		add_child(timer)
+		timer.start()
+		print('  Cascade Fracture not available -- placeholder shown (collapses in 4s)')
+
+func _make_placeholder(pos: Vector3, color: Color, node_name: String) -> MeshInstance3D:
+	var mesh_inst := MeshInstance3D.new()
+	mesh_inst.name = node_name
+	var box := BoxMesh.new()
+	box.size = Vector3(2, 2, 0.3) if 'Cloth' in node_name else Vector3(2, 2, 2)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.metallic = 0.3
+	mat.roughness = 0.4
+	mat.emission_enabled = true
+	mat.emission = Color(color.r * 0.3, color.g * 0.3, color.b * 0.3)
+	mat.emission_energy_multiplier = 0.5
+	box.material = mat
+	mesh_inst.mesh = box
+	mesh_inst.position = pos
+	return mesh_inst
+
+func _build_camera() -> void:
+	var camera := Camera3D.new()
+	camera.name = 'OrbitCamera'
+	camera.fov = 50.0
+	camera.near = 0.1
+	camera.far = 100.0
+	camera.position = Vector3(0, orbit_height, orbit_radius)
+	camera.look_at(Vector3(0, 2, 0))
+	camera.current = true
+	add_child(camera)
+
+func _process(delta: float) -> void:
+	# Orbit camera
+	orbit_angle += orbit_speed * delta
+	var cam := get_node_or_null('OrbitCamera') as Camera3D
+	if cam:
+		cam.position = Vector3(
+			sin(orbit_angle) * orbit_radius,
+			orbit_height,
+			cos(orbit_angle) * orbit_radius
+		)
+		cam.look_at(Vector3(0, 2, 0))
+
+	# FPS report every 5 seconds
+	fps_timer += delta
+	if fps_timer >= 5.0:
+		fps_timer = 0.0
+		print('  FPS: %d' % Engine.get_frames_per_second())
+"
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
+size = Vector3(30, 0.2, 30)
+
+[sub_resource type="BoxMesh" id="BoxMesh_ground"]
+size = Vector3(30, 0.2, 30)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.15, 0.15, 0.18, 1)
+metallic = 0.1
+roughness = 0.85
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 1
+bg_color = Color(0.05, 0.05, 0.08, 1)
+ambient_light_source = 1
+ambient_light_color = Color(0.12, 0.12, 0.18, 1)
+ambient_light_energy = 0.4
+tonemap_mode = 3
+glow_enabled = true
+glow_intensity = 0.3
+glow_bloom = 0.1
+
+[sub_resource type="BoxMesh" id="BoxMesh_label_cloth"]
+size = Vector3(1.6, 0.4, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_label_cloth"]
+albedo_color = Color(0.9, 0.15, 0.1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_label_fluid"]
+size = Vector3(1.6, 0.4, 0.05)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_label_fluid"]
+albedo_color = Color(0.1, 0.3, 0.9, 1)
+
+[node name="Main" type="Node3D"]
+script = SubResource("GDScript_main")
+
+[node name="Labels" type="Node3D" parent="."]
+
+[node name="ClothLabel" type="MeshInstance3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 5.5, 0)
+mesh = SubResource("BoxMesh_label_cloth")
+surface_material_override/0 = SubResource("StandardMaterial3D_label_cloth")
+
+[node name="FluidLabel" type="MeshInstance3D" parent="Labels"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, 0)
+mesh = SubResource("BoxMesh_label_fluid")
+surface_material_override/0 = SubResource("StandardMaterial3D_label_fluid")
