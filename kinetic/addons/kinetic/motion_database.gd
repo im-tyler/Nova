@@ -32,7 +32,7 @@ const IGNORE_RANGE_END := 20
 const IGNORE_SURROUNDING := 20
 
 ## Default feature weights for search. Higher weight = more influence on matching.
-const DEFAULT_WEIGHTS: PackedFloat32Array = PackedFloat32Array([
+static var DEFAULT_WEIGHTS: PackedFloat32Array = PackedFloat32Array([
 	0.75, 0.75, 0.75,   # left foot pos
 	0.75, 0.75, 0.75,   # right foot pos
 	1.0, 1.0, 1.0,      # left foot vel

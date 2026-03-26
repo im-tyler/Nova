@@ -26,6 +26,10 @@ func _init() -> void:
 	label = "Instance Placer"
 
 
+func get_class_name_custom() -> String:
+	return "InstancePlacer"
+
+
 func execute(points: Array[ScatterPoint]) -> Array[ScatterPoint]:
 	if mesh == null:
 		push_warning("InstancePlacer: no mesh assigned.")

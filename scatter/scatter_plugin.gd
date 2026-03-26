@@ -12,6 +12,8 @@ var _main_panel: VBoxContainer = null
 var _graph_editor: ScatterGraphEditor = null
 var _info_label: Label = null
 var _add_menu: MenuButton = null
+var _save_dialog: EditorFileDialog = null
+var _load_dialog: EditorFileDialog = null
 
 
 func _enter_tree() -> void:
@@ -54,9 +56,15 @@ func _build_main_panel() -> VBoxContainer:
 	_add_menu.flat = false
 	var popup := _add_menu.get_popup()
 	popup.add_item("Surface Sampler", 0)
-	popup.add_item("Slope Filter", 1)
-	popup.add_item("Random Transform", 2)
-	popup.add_item("Instance Placer", 3)
+	popup.add_item("Spline Sampler", 1)
+	popup.add_separator()
+	popup.add_item("Slope Filter", 2)
+	popup.add_item("Noise Filter", 3)
+	popup.add_separator()
+	popup.add_item("Random Transform", 4)
+	popup.add_item("Align to Normal", 5)
+	popup.add_separator()
+	popup.add_item("Instance Placer", 6)
 	popup.id_pressed.connect(_on_add_menu_id_pressed)
 	toolbar.add_child(_add_menu)
 
@@ -74,6 +82,21 @@ func _build_main_panel() -> VBoxContainer:
 	clear_btn.text = "Clear"
 	clear_btn.pressed.connect(_on_clear_pressed)
 	toolbar.add_child(clear_btn)
+
+	# Separator
+	toolbar.add_child(VSeparator.new())
+
+	# Save button
+	var save_btn := Button.new()
+	save_btn.text = "Save Graph"
+	save_btn.pressed.connect(_on_save_pressed)
+	toolbar.add_child(save_btn)
+
+	# Load button
+	var load_btn := Button.new()
+	load_btn.text = "Load Graph"
+	load_btn.pressed.connect(_on_load_pressed)
+	toolbar.add_child(load_btn)
 
 	# Spacer
 	var spacer := Control.new()
@@ -113,9 +136,12 @@ func _on_add_menu_id_pressed(id: int) -> void:
 	var type_name: String
 	match id:
 		0: type_name = "SurfaceSampler"
-		1: type_name = "SlopeFilter"
-		2: type_name = "RandomTransform"
-		3: type_name = "InstancePlacer"
+		1: type_name = "SplineSampler"
+		2: type_name = "SlopeFilter"
+		3: type_name = "NoiseFilter"
+		4: type_name = "RandomTransform"
+		5: type_name = "AlignToNormal"
+		6: type_name = "InstancePlacer"
 		_: return
 
 	var node: ScatterNode = _create_node_by_type(type_name)
@@ -161,10 +187,63 @@ func _create_node_by_type(type_name: String) -> ScatterNode:
 	match type_name:
 		"SurfaceSampler":
 			return SurfaceSampler.new()
+		"SplineSampler":
+			return SplineSampler.new()
 		"SlopeFilter":
 			return SlopeFilter.new()
+		"NoiseFilter":
+			return NoiseFilter.new()
 		"RandomTransform":
 			return RandomTransform.new()
+		"AlignToNormal":
+			return AlignToNormal.new()
 		"InstancePlacer":
 			return InstancePlacer.new()
 	return null
+
+
+## ---- Save / Load ----------------------------------------------------------
+
+func _on_save_pressed() -> void:
+	if _save_dialog == null:
+		_save_dialog = EditorFileDialog.new()
+		_save_dialog.file_mode = EditorFileDialog.FILE_MODE_SAVE_FILE
+		_save_dialog.access = EditorFileDialog.ACCESS_RESOURCES
+		_save_dialog.title = "Save Scatter Graph"
+		_save_dialog.add_filter("*.tres ; Godot Resource")
+		_save_dialog.file_selected.connect(_on_save_file_selected)
+		_main_panel.add_child(_save_dialog)
+	_save_dialog.popup_centered(Vector2i(800, 600))
+
+
+func _on_load_pressed() -> void:
+	if _load_dialog == null:
+		_load_dialog = EditorFileDialog.new()
+		_load_dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
+		_load_dialog.access = EditorFileDialog.ACCESS_RESOURCES
+		_load_dialog.title = "Load Scatter Graph"
+		_load_dialog.add_filter("*.tres ; Godot Resource")
+		_load_dialog.file_selected.connect(_on_load_file_selected)
+		_main_panel.add_child(_load_dialog)
+	_load_dialog.popup_centered(Vector2i(800, 600))
+
+
+func _on_save_file_selected(path: String) -> void:
+	if _graph_editor == null:
+		return
+	var err := _graph_editor.save_graph_to_file(path)
+	if err == OK:
+		_info_label.text = "Graph saved to %s" % path
+	else:
+		_info_label.text = "Failed to save graph (error %d)" % err
+
+
+func _on_load_file_selected(path: String) -> void:
+	if _graph_editor == null:
+		return
+	var err := _graph_editor.load_graph_from_file(path)
+	if err == OK:
+		_toolbar_add_offset = 0.0
+		_info_label.text = "Graph loaded from %s" % path
+	else:
+		_info_label.text = "Failed to load graph (error %d)" % err

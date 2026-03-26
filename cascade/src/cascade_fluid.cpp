@@ -427,10 +427,11 @@ void CascadeFluid::_simulate_step(float dt) {
     for (uint32_t k = 2; k <= n_padded; k <<= 1) {
         for (uint32_t j = k >> 1; j > 0; j >>= 1) {
             PackedByteArray push_data;
-            push_data.resize(8);
+            push_data.resize(16);
+            push_data.fill(0);
             memcpy(push_data.ptrw(), &k, 4);
             memcpy(push_data.ptrw() + 4, &j, 4);
-            local_rd->compute_list_set_push_constant(cl, push_data, 8);
+            local_rd->compute_list_set_push_constant(cl, push_data, 16);
             local_rd->compute_list_dispatch(cl, sort_groups, 1, 1);
             local_rd->compute_list_add_barrier(cl);
         }

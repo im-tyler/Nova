@@ -25,10 +25,13 @@ func _build_menu() -> void:
 	_type_map.clear()
 
 	var types: Array[Dictionary] = [
-		{"id": 0, "label": "Surface Sampler", "type": "SurfaceSampler"},
-		{"id": 1, "label": "Slope Filter",    "type": "SlopeFilter"},
-		{"id": 2, "label": "Random Transform", "type": "RandomTransform"},
-		{"id": 3, "label": "Instance Placer",  "type": "InstancePlacer"},
+		{"id": 0, "label": "Surface Sampler",  "type": "SurfaceSampler"},
+		{"id": 1, "label": "Spline Sampler",   "type": "SplineSampler"},
+		{"id": 2, "label": "Slope Filter",     "type": "SlopeFilter"},
+		{"id": 3, "label": "Noise Filter",     "type": "NoiseFilter"},
+		{"id": 4, "label": "Random Transform",  "type": "RandomTransform"},
+		{"id": 5, "label": "Align to Normal",   "type": "AlignToNormal"},
+		{"id": 6, "label": "Instance Placer",   "type": "InstancePlacer"},
 	]
 
 	for entry in types:

@@ -222,16 +222,101 @@ func _on_delete_nodes_request(nodes: Array[StringName]) -> void:
 			remove_scatter_node((ui as ScatterGraphNodeUI).node_id)
 
 
+## ---- Save / Load ----------------------------------------------------------
+
+## Serialize the current graph state to a .tres file at the given path.
+func save_graph_to_file(path: String) -> Error:
+	var graph := ScatterGraph.new()
+
+	# Build ordered list from topological sort or just ID order.
+	var sorted_ids := _node_map.keys().duplicate()
+	sorted_ids.sort()
+
+	var id_to_index: Dictionary = {}
+	for i in range(sorted_ids.size()):
+		id_to_index[sorted_ids[i]] = i
+		var ui: ScatterGraphNodeUI = _node_map[sorted_ids[i]]
+		graph.nodes.append(ui.scatter_node)
+
+	# Store positions and connections as metadata.
+	var positions: Array[Dictionary] = []
+	for id in sorted_ids:
+		var ui: ScatterGraphNodeUI = _node_map[id]
+		positions.append({
+			"x": ui.position_offset.x,
+			"y": ui.position_offset.y,
+		})
+	graph.set_meta("node_positions", positions)
+
+	_rebuild_edge_list()
+	var connections: Array[Dictionary] = []
+	for edge in _edge_list:
+		if id_to_index.has(edge["from_id"]) and id_to_index.has(edge["to_id"]):
+			connections.append({
+				"from": id_to_index[edge["from_id"]],
+				"to": id_to_index[edge["to_id"]],
+			})
+	graph.set_meta("connections", connections)
+
+	return ResourceSaver.save(graph, path)
+
+
+## Load a graph from a .tres file and rebuild the visual editor.
+func load_graph_from_file(path: String) -> Error:
+	var graph := ScatterGraph.load_from_file(path)
+	if graph == null:
+		return ERR_FILE_CANT_READ
+
+	clear_graph()
+
+	# Reconstruct nodes.
+	var positions: Array = []
+	if graph.has_meta("node_positions"):
+		positions = graph.get_meta("node_positions")
+
+	var ui_nodes: Array[ScatterGraphNodeUI] = []
+	for i in range(graph.nodes.size()):
+		var scatter_node: ScatterNode = graph.nodes[i]
+		if scatter_node == null:
+			continue
+		var pos := Vector2.ZERO
+		if i < positions.size():
+			pos = Vector2(positions[i]["x"], positions[i]["y"])
+		var ui := add_scatter_node(scatter_node, pos)
+		ui_nodes.append(ui)
+
+	# Reconstruct connections.
+	if graph.has_meta("connections"):
+		var connections: Array = graph.get_meta("connections")
+		for conn in connections:
+			var from_idx: int = conn["from"]
+			var to_idx: int = conn["to"]
+			if from_idx < ui_nodes.size() and to_idx < ui_nodes.size():
+				connect_node(
+					ui_nodes[from_idx].name, 0,
+					ui_nodes[to_idx].name, 0
+				)
+		_rebuild_edge_list()
+
+	return OK
+
+
 ## ---- Internal helpers -----------------------------------------------------
 
 func _create_scatter_node(type_name: String) -> ScatterNode:
 	match type_name:
 		"SurfaceSampler":
 			return SurfaceSampler.new()
+		"SplineSampler":
+			return SplineSampler.new()
 		"SlopeFilter":
 			return SlopeFilter.new()
+		"NoiseFilter":
+			return NoiseFilter.new()
 		"RandomTransform":
 			return RandomTransform.new()
+		"AlignToNormal":
+			return AlignToNormal.new()
 		"InstancePlacer":
 			return InstancePlacer.new()
 	push_warning("ScatterGraphEditor: unknown node type '%s'" % type_name)

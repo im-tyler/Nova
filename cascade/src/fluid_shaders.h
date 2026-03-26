@@ -181,6 +181,8 @@ FLUID_PARAMS_BLOCK
 "layout(push_constant) uniform PushConstants {\n"
 "    uint k; // major step (block size)\n"
 "    uint j; // substep\n"
+"    uint pad0;\n"
+"    uint pad1;\n"
 "} pc;\n"
 "\n"
 "void main() {\n"

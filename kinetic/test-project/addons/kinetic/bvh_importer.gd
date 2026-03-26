@@ -249,7 +249,7 @@ func _parse_hierarchy(lines: PackedStringArray, start: int) -> int:
 		if line.begins_with("MOTION"):
 			return idx - 1  # back up so MOTION line is re-read
 
-		var tokens := line.split(" ", false)
+		var tokens := line.replace("\t", " ").split(" ", false)
 		if tokens.size() == 0:
 			continue
 
@@ -353,10 +353,7 @@ func _parse_motion(lines: PackedStringArray, start: int) -> Variant:
 			line = lines[idx].strip_edges()
 			idx += 1
 
-		var tokens := line.split(" ", false)
-		# Some BVH files use tabs
-		if tokens.size() < 2:
-			tokens = line.split("\t", false)
+		var tokens := line.replace("\t", " ").split(" ", false)
 
 		var row := PackedFloat64Array()
 		row.resize(tokens.size())

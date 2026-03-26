@@ -24,6 +24,10 @@ func _init() -> void:
 	label = "Surface Sampler"
 
 
+func get_class_name_custom() -> String:
+	return "SurfaceSampler"
+
+
 func execute(_points: Array[ScatterPoint]) -> Array[ScatterPoint]:
 	var result: Array[ScatterPoint] = []
 

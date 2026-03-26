@@ -42,3 +42,32 @@ func remove_node(index: int) -> void:
 ## Clear all nodes from the graph.
 func clear() -> void:
 	nodes.clear()
+
+
+## Serialize the graph (nodes + connections metadata) to a .tres resource file.
+## Connection data is stored as metadata on the resource so it round-trips.
+func save_to_file(path: String) -> Error:
+	# Store node class names and positions for the editor to reconstruct.
+	var node_data: Array[Dictionary] = []
+	for node in nodes:
+		if node == null:
+			continue
+		node_data.append({
+			"type": node.get_class_name_custom(),
+			"properties": node.serialize_properties(),
+		})
+	set_meta("scatter_node_data", node_data)
+	return ResourceSaver.save(self, path)
+
+
+## Load a graph from a .tres resource file.  Returns the loaded ScatterGraph
+## or null on failure.
+static func load_from_file(path: String) -> ScatterGraph:
+	if not ResourceLoader.exists(path):
+		push_warning("ScatterGraph: file not found '%s'" % path)
+		return null
+	var res := ResourceLoader.load(path)
+	if res is ScatterGraph:
+		return res as ScatterGraph
+	push_warning("ScatterGraph: loaded resource is not a ScatterGraph.")
+	return null

@@ -101,10 +101,10 @@ static func quat_to_scaled_axis(q: Quaternion) -> Vector3:
 	var qn := q.normalized()
 	if qn.w < 0.0:
 		qn = Quaternion(-qn.x, -qn.y, -qn.z, -qn.w)
-	var half_angle := acosf(clampf(qn.w, -1.0, 1.0))
+	var half_angle := acos(clampf(qn.w, -1.0, 1.0))
 	if half_angle < 1e-6:
 		return Vector3.ZERO
-	var sin_half := sinf(half_angle)
+	var sin_half := sin(half_angle)
 	if absf(sin_half) < 1e-6:
 		return Vector3.ZERO
 	var axis := Vector3(qn.x, qn.y, qn.z) / sin_half
@@ -118,5 +118,5 @@ static func scaled_axis_to_quat(v: Vector3) -> Quaternion:
 		return Quaternion.IDENTITY
 	var axis := v / angle
 	var half := angle * 0.5
-	var s := sinf(half)
-	return Quaternion(axis.x * s, axis.y * s, axis.z * s, cosf(half))
+	var s := sin(half)
+	return Quaternion(axis.x * s, axis.y * s, axis.z * s, cos(half))

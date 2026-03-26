@@ -6,6 +6,7 @@
 #include <godot_cpp/classes/rd_shader_spirv.hpp>
 #include <godot_cpp/classes/rd_uniform.hpp>
 #include <godot_cpp/classes/quad_mesh.hpp>
+#include <godot_cpp/classes/standard_material3d.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include <cstring>
@@ -173,7 +174,17 @@ void TempestEmitter::_init_multimesh() {
 
     Ref<QuadMesh> quad;
     quad.instantiate();
-    quad->set_size(Vector2(particle_size, particle_size));
+    quad->set_size(Vector2(1.0f, 1.0f));
+
+    // Material: billboard particles, vertex colors, alpha transparency
+    Ref<StandardMaterial3D> mat;
+    mat.instantiate();
+    mat->set_billboard_mode(BaseMaterial3D::BILLBOARD_PARTICLES);
+    mat->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+    mat->set_transparency(BaseMaterial3D::TRANSPARENCY_ALPHA);
+    mat->set_shading_mode(BaseMaterial3D::SHADING_MODE_UNSHADED);
+    quad->set_material(mat);
+
     mm->set_mesh(quad);
 
     mm->set_instance_count(num_particles);
@@ -574,6 +585,7 @@ void TempestEmitter::_cleanup_compute() {
     if (update_params_rid.is_valid()) rd->free_rid(update_params_rid);
     if (emit_params_rid.is_valid()) rd->free_rid(emit_params_rid);
     if (emit_counter_rid.is_valid()) rd->free_rid(emit_counter_rid);
+    if (force_field_buffer_rid.is_valid()) rd->free_rid(force_field_buffer_rid);
 
     memdelete(rd);
     local_rd = nullptr;

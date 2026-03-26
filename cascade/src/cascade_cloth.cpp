@@ -686,55 +686,125 @@ void CascadeCloth::_update_mesh_from_gpu() {
     PackedByteArray pos_bytes = local_rd->buffer_get_data(positions_buf);
     const float *pos = reinterpret_cast<const float *>(pos_bytes.ptr());
 
-    Ref<SurfaceTool> st;
-    st.instantiate();
-    st->begin(Mesh::PRIMITIVE_TRIANGLES);
+    if (!mesh_built) {
+        // First frame: build the mesh with SurfaceTool (topology established once)
+        Ref<SurfaceTool> st;
+        st.instantiate();
+        st->begin(Mesh::PRIMITIVE_TRIANGLES);
 
-    auto add_vert = [&](int i) {
+        auto add_vert = [&](int i) {
+            int b = i * 4;
+            st->add_vertex(Vector3(pos[b], pos[b + 1], pos[b + 2]));
+        };
+
+        if (use_source_mesh && mesh_indices.size() > 0) {
+            int tri_count = mesh_indices.size() / 3;
+            for (int t = 0; t < tri_count; t++) {
+                int i0 = mesh_indices[t * 3];
+                int i1 = mesh_indices[t * 3 + 1];
+                int i2 = mesh_indices[t * 3 + 2];
+                add_vert(i0); add_vert(i1); add_vert(i2);
+                add_vert(i2); add_vert(i1); add_vert(i0);
+            }
+        } else if (use_source_mesh) {
+            for (int i = 0; i < vertex_count; i += 3) {
+                add_vert(i); add_vert(i + 1); add_vert(i + 2);
+                add_vert(i + 2); add_vert(i + 1); add_vert(i);
+            }
+        } else {
+            for (int row = 0; row < cloth_height - 1; row++) {
+                for (int col = 0; col < cloth_width - 1; col++) {
+                    int tl = row * cloth_width + col;
+                    int tr = tl + 1;
+                    int bl = tl + cloth_width;
+                    int br = bl + 1;
+                    add_vert(tl); add_vert(bl); add_vert(tr);
+                    add_vert(tr); add_vert(bl); add_vert(br);
+                    add_vert(tr); add_vert(bl); add_vert(tl);
+                    add_vert(br); add_vert(bl); add_vert(tr);
+                }
+            }
+        }
+
+        st->generate_normals();
+        Ref<ArrayMesh> initial_mesh = st->commit();
+        set_mesh(initial_mesh);
+        mesh_built = true;
+
+        // Cache the vertex count for future updates
+        if (initial_mesh.is_valid() && initial_mesh->get_surface_count() > 0) {
+            Array arrays = initial_mesh->surface_get_arrays(0);
+            PackedVector3Array verts = arrays[Mesh::ARRAY_VERTEX];
+            render_vertex_count = verts.size();
+        }
+        return;
+    }
+
+    // Subsequent frames: update vertex positions in-place
+    // Build a PackedVector3Array with updated positions matching the render mesh topology
+    Ref<Mesh> m = get_mesh();
+    if (!m.is_valid() || render_vertex_count == 0) return;
+
+    // Build the vertex position array matching the render topology
+    PackedVector3Array new_positions;
+    new_positions.resize(render_vertex_count);
+    Vector3 *dst = new_positions.ptrw();
+    int vi = 0;
+
+    auto write_vert = [&](int i) {
         int b = i * 4;
-        st->add_vertex(Vector3(pos[b], pos[b + 1], pos[b + 2]));
+        dst[vi++] = Vector3(pos[b], pos[b + 1], pos[b + 2]);
     };
 
     if (use_source_mesh && mesh_indices.size() > 0) {
-        // Source mesh mode: use original topology
         int tri_count = mesh_indices.size() / 3;
         for (int t = 0; t < tri_count; t++) {
             int i0 = mesh_indices[t * 3];
             int i1 = mesh_indices[t * 3 + 1];
             int i2 = mesh_indices[t * 3 + 2];
-            // Front face
-            add_vert(i0); add_vert(i1); add_vert(i2);
-            // Back face
-            add_vert(i2); add_vert(i1); add_vert(i0);
+            write_vert(i0); write_vert(i1); write_vert(i2);
+            write_vert(i2); write_vert(i1); write_vert(i0);
         }
     } else if (use_source_mesh) {
-        // Non-indexed source mesh
         for (int i = 0; i < vertex_count; i += 3) {
-            add_vert(i); add_vert(i + 1); add_vert(i + 2);
-            add_vert(i + 2); add_vert(i + 1); add_vert(i);
+            write_vert(i); write_vert(i + 1); write_vert(i + 2);
+            write_vert(i + 2); write_vert(i + 1); write_vert(i);
         }
     } else {
-        // Grid mode
         for (int row = 0; row < cloth_height - 1; row++) {
             for (int col = 0; col < cloth_width - 1; col++) {
                 int tl = row * cloth_width + col;
                 int tr = tl + 1;
                 int bl = tl + cloth_width;
                 int br = bl + 1;
-
-                // Front + back faces
-                add_vert(tl); add_vert(bl); add_vert(tr);
-                add_vert(tr); add_vert(bl); add_vert(br);
-                add_vert(tr); add_vert(bl); add_vert(tl);
-                add_vert(br); add_vert(bl); add_vert(tr);
+                write_vert(tl); write_vert(bl); write_vert(tr);
+                write_vert(tr); write_vert(bl); write_vert(br);
+                write_vert(tr); write_vert(bl); write_vert(tl);
+                write_vert(br); write_vert(bl); write_vert(tr);
             }
         }
     }
 
-    // SurfaceTool computes normals per-face from winding order.
-    // Both front and back triangles get correct outward-facing normals.
+    // Rebuild with normals (still needs SurfaceTool for normal generation)
+    // but reuse the same ArrayMesh instead of creating a new one
+    Ref<SurfaceTool> st;
+    st.instantiate();
+    st->begin(Mesh::PRIMITIVE_TRIANGLES);
+    for (int i = 0; i < render_vertex_count; i++) {
+        st->add_vertex(new_positions[i]);
+    }
     st->generate_normals();
-    set_mesh(st->commit());
+
+    // Update existing mesh surface instead of replacing the entire mesh
+    Ref<ArrayMesh> am = Object::cast_to<ArrayMesh>(m.ptr());
+    if (am.is_valid()) {
+        // Clear and rebuild surface (still faster than new mesh allocation)
+        am->clear_surfaces();
+        Array arrays = st->commit_to_arrays();
+        am->add_surface_from_arrays(Mesh::PRIMITIVE_TRIANGLES, arrays);
+    } else {
+        set_mesh(st->commit());
+    }
 }
 
 // -------------------------------------------------------------------

@@ -19,6 +19,10 @@ func _init() -> void:
 	label = "Slope Filter"
 
 
+func get_class_name_custom() -> String:
+	return "SlopeFilter"
+
+
 func execute(points: Array[ScatterPoint]) -> Array[ScatterPoint]:
 	var result: Array[ScatterPoint] = []
 

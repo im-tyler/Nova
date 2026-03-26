@@ -138,6 +138,12 @@ private:
     float sim_time = 0.0f;
     bool default_material_applied = false;
 
+    // Optimized mesh update: build mesh once, update vertex data each frame
+    bool mesh_built = false;
+    RID mesh_rid;  // RenderingServer mesh RID for direct vertex updates
+    int render_vertex_count = 0; // total verts in render mesh (includes back faces)
+    uint32_t vertex_stride = 0;  // bytes per vertex in the render mesh
+
     // Internal methods
     void _init_gpu();
     RID _compile_shader(const char *source);

@@ -49,6 +49,12 @@ func setup(p_scatter_node: ScatterNode, p_node_id: int) -> void:
 		_setup_slope_filter()
 	elif scatter_node is RandomTransform:
 		_setup_random_transform()
+	elif scatter_node is SplineSampler:
+		_setup_spline_sampler()
+	elif scatter_node is NoiseFilter:
+		_setup_noise_filter()
+	elif scatter_node is AlignToNormal:
+		_setup_align_to_normal()
 	elif scatter_node is InstancePlacer:
 		_setup_instance_placer()
 	else:
@@ -208,6 +214,123 @@ func _setup_instance_placer() -> void:
 	add_child(info)
 
 	_apply_category_color(COLOR_OUTPUT)
+
+
+func _setup_spline_sampler() -> void:
+	category = "generator"
+
+	# Row 0: output-only slot
+	_add_slot_row("", false, "Points", true)
+	set_slot(0, false, PORT_TYPE_POINTS, COLOR_GENERATOR,
+			 true, PORT_TYPE_POINTS, COLOR_GENERATOR)
+
+	# Editable: point_count
+	var pc_spin := SpinBox.new()
+	pc_spin.min_value = 1
+	pc_spin.max_value = 100000
+	pc_spin.step = 1
+	pc_spin.value = (scatter_node as SplineSampler).point_count
+	pc_spin.prefix = "Count: "
+	pc_spin.value_changed.connect(func(v: float) -> void:
+		(scatter_node as SplineSampler).point_count = int(v)
+	)
+	add_child(pc_spin)
+
+	# Editable: offset_range
+	var offset_spin := SpinBox.new()
+	offset_spin.min_value = 0.0
+	offset_spin.max_value = 100.0
+	offset_spin.step = 0.1
+	offset_spin.value = (scatter_node as SplineSampler).offset_range
+	offset_spin.prefix = "Offset: "
+	offset_spin.value_changed.connect(func(v: float) -> void:
+		(scatter_node as SplineSampler).offset_range = v
+	)
+	add_child(offset_spin)
+
+	# Editable: seed
+	var seed_spin := SpinBox.new()
+	seed_spin.min_value = 0
+	seed_spin.max_value = 999999
+	seed_spin.step = 1
+	seed_spin.value = (scatter_node as SplineSampler).seed
+	seed_spin.prefix = "Seed: "
+	seed_spin.value_changed.connect(func(v: float) -> void:
+		(scatter_node as SplineSampler).seed = int(v)
+	)
+	add_child(seed_spin)
+
+	_apply_category_color(COLOR_GENERATOR)
+
+
+func _setup_noise_filter() -> void:
+	category = "filter"
+
+	# Row 0: input + output
+	_add_slot_row("Points", true, "Points", true)
+	set_slot(0, true, PORT_TYPE_POINTS, COLOR_FILTER,
+			 true, PORT_TYPE_POINTS, COLOR_FILTER)
+
+	# Editable: noise_scale
+	var scale_spin := SpinBox.new()
+	scale_spin.min_value = 0.01
+	scale_spin.max_value = 100.0
+	scale_spin.step = 0.1
+	scale_spin.value = (scatter_node as NoiseFilter).noise_scale
+	scale_spin.prefix = "Scale: "
+	scale_spin.value_changed.connect(func(v: float) -> void:
+		(scatter_node as NoiseFilter).noise_scale = v
+	)
+	add_child(scale_spin)
+
+	# Editable: threshold
+	var thresh_spin := SpinBox.new()
+	thresh_spin.min_value = 0.0
+	thresh_spin.max_value = 1.0
+	thresh_spin.step = 0.01
+	thresh_spin.value = (scatter_node as NoiseFilter).threshold
+	thresh_spin.prefix = "Threshold: "
+	thresh_spin.value_changed.connect(func(v: float) -> void:
+		(scatter_node as NoiseFilter).threshold = v
+	)
+	add_child(thresh_spin)
+
+	# Editable: seed
+	var seed_spin := SpinBox.new()
+	seed_spin.min_value = 0
+	seed_spin.max_value = 999999
+	seed_spin.step = 1
+	seed_spin.value = (scatter_node as NoiseFilter).seed
+	seed_spin.prefix = "Seed: "
+	seed_spin.value_changed.connect(func(v: float) -> void:
+		(scatter_node as NoiseFilter).seed = int(v)
+	)
+	add_child(seed_spin)
+
+	_apply_category_color(COLOR_FILTER)
+
+
+func _setup_align_to_normal() -> void:
+	category = "transform"
+
+	# Row 0: input + output
+	_add_slot_row("Points", true, "Points", true)
+	set_slot(0, true, PORT_TYPE_POINTS, COLOR_TRANSFORM,
+			 true, PORT_TYPE_POINTS, COLOR_TRANSFORM)
+
+	# Editable: blend_factor
+	var blend_spin := SpinBox.new()
+	blend_spin.min_value = 0.0
+	blend_spin.max_value = 1.0
+	blend_spin.step = 0.01
+	blend_spin.value = (scatter_node as AlignToNormal).blend_factor
+	blend_spin.prefix = "Blend: "
+	blend_spin.value_changed.connect(func(v: float) -> void:
+		(scatter_node as AlignToNormal).blend_factor = v
+	)
+	add_child(blend_spin)
+
+	_apply_category_color(COLOR_TRANSFORM)
 
 
 ## ---- Helpers ---------------------------------------------------------------

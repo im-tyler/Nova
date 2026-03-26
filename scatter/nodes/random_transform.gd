@@ -22,6 +22,10 @@ func _init() -> void:
 	label = "Random Transform"
 
 
+func get_class_name_custom() -> String:
+	return "RandomTransform"
+
+
 func execute(points: Array[ScatterPoint]) -> Array[ScatterPoint]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
