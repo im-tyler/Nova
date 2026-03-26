@@ -9,6 +9,7 @@
 #include <godot_cpp/classes/rd_shader_spirv.hpp>
 #include <godot_cpp/classes/rd_shader_source.hpp>
 #include <godot_cpp/classes/rd_uniform.hpp>
+#include <godot_cpp/classes/skeleton3d.hpp>
 
 #include <vector>
 
@@ -54,6 +55,11 @@ public:
     void pin_vertex(int index);
     void unpin_vertex(int index);
     void pin_vertices_above(float y_threshold);
+
+    // Skeletal mesh binding
+    void set_skeleton_path(NodePath p_path);
+    NodePath get_skeleton_path() const;
+    void bind_vertex_to_bone(int vertex_index, int bone_index);
 
     // Collider management
     void add_sphere_collider(Vector3 center, float radius);
@@ -132,6 +138,23 @@ private:
     RID collide_uset;
     RID update_uset;
     RID normals_uset;
+
+    // Self-collision
+    RID sc_clear_shader, sc_clear_pipeline;
+    RID sc_build_shader, sc_build_pipeline;
+    RID sc_resolve_shader, sc_resolve_pipeline;
+    RID sc_grid_heads_buf;
+    RID sc_grid_next_buf;
+    RID sc_clear_uset, sc_build_uset, sc_resolve_uset;
+    uint32_t sc_grid_size = 32;
+    uint32_t sc_grid_total = 0;
+    float cloth_thickness = 0.02f;
+
+    // Skeletal mesh binding
+    NodePath skeleton_path;
+    Skeleton3D *skeleton = nullptr;
+    struct BoneBinding { uint32_t vertex_index; int bone_index; };
+    std::vector<BoneBinding> bone_bindings;
 
     bool gpu_initialized = false;
     int vertex_count = 0;

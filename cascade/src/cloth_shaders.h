@@ -45,8 +45,8 @@
 "    float wind_turbulence;\n" \
 "    float time;\n" \
 "    float friction;\n" \
-"    float pad1;\n" \
-"    float pad2;\n" \
+"    float cloth_thickness;\n" \
+"    uint self_collision_grid_size;\n" \
 "};\n"
 
 // -------------------------------------------------------------------
@@ -379,5 +379,147 @@ PARAMS_BLOCK
 "    normal = len > 1e-7 ? normal / len : vec3(0.0, 0.0, 1.0);\n"
 "\n"
 "    normals[idx] = vec4(normal, 0.0);\n"
+"}\n"
+;
+
+// -------------------------------------------------------------------
+// SELF-COLLISION: spatial hash grid to detect and resolve
+// cloth-on-cloth penetration
+//
+// Buffer layout for self-collision:
+//   8: sc_grid_heads  uint (linked list head per cell, 0xFFFFFFFF = empty)
+//   9: sc_grid_next   uint (per-vertex next pointer in cell list)
+// -------------------------------------------------------------------
+
+static const char *CLOTH_SC_CLEAR_GRID_SHADER =
+"#version 450\n"
+"layout(local_size_x = 64) in;\n"
+"\n"
+"layout(set = 0, binding = 8, std430) restrict writeonly buffer GridHeads {\n"
+"    uint grid_heads[];\n"
+"};\n"
+PARAMS_BLOCK
+"\n"
+"void main() {\n"
+"    uint idx = gl_GlobalInvocationID.x;\n"
+"    uint total = self_collision_grid_size * self_collision_grid_size * self_collision_grid_size;\n"
+"    if (idx >= total) return;\n"
+"    grid_heads[idx] = 0xFFFFFFFFu;\n"
+"}\n"
+;
+
+static const char *CLOTH_SC_BUILD_GRID_SHADER =
+"#version 450\n"
+"layout(local_size_x = 64) in;\n"
+"\n"
+"layout(set = 0, binding = 1, std430) restrict readonly buffer Predicted {\n"
+"    vec4 predicted[];\n"
+"};\n"
+"layout(set = 0, binding = 8, std430) restrict buffer GridHeads {\n"
+"    uint grid_heads[];\n"
+"};\n"
+"layout(set = 0, binding = 9, std430) restrict writeonly buffer GridNext {\n"
+"    uint grid_next[];\n"
+"};\n"
+PARAMS_BLOCK
+"\n"
+"uint hash_cell(ivec3 cell) {\n"
+"    uint gs = self_collision_grid_size;\n"
+"    if (cell.x < 0 || cell.y < 0 || cell.z < 0) return 0xFFFFFFFFu;\n"
+"    if (uint(cell.x) >= gs || uint(cell.y) >= gs || uint(cell.z) >= gs) return 0xFFFFFFFFu;\n"
+"    return uint(cell.x) + uint(cell.y) * gs + uint(cell.z) * gs * gs;\n"
+"}\n"
+"\n"
+"void main() {\n"
+"    uint idx = gl_GlobalInvocationID.x;\n"
+"    if (idx >= num_vertices) return;\n"
+"\n"
+"    vec3 p = predicted[idx].xyz;\n"
+"    float cell_size = cloth_thickness * 2.0;\n"
+"    ivec3 cell = ivec3(floor(p / cell_size)) + ivec3(int(self_collision_grid_size) / 2);\n"
+"    uint h = hash_cell(cell);\n"
+"    if (h == 0xFFFFFFFFu) {\n"
+"        grid_next[idx] = 0xFFFFFFFFu;\n"
+"        return;\n"
+"    }\n"
+"    uint old = atomicExchange(grid_heads[h], idx);\n"
+"    grid_next[idx] = old;\n"
+"}\n"
+;
+
+static const char *CLOTH_SC_RESOLVE_SHADER =
+"#version 450\n"
+"layout(local_size_x = 64) in;\n"
+"\n"
+"layout(set = 0, binding = 0, std430) restrict readonly buffer Positions {\n"
+"    vec4 positions[];\n"
+"};\n"
+"layout(set = 0, binding = 1, std430) restrict buffer Predicted {\n"
+"    vec4 predicted[];\n"
+"};\n"
+"layout(set = 0, binding = 8, std430) restrict readonly buffer GridHeads {\n"
+"    uint grid_heads[];\n"
+"};\n"
+"layout(set = 0, binding = 9, std430) restrict readonly buffer GridNext {\n"
+"    uint grid_next[];\n"
+"};\n"
+PARAMS_BLOCK
+"\n"
+"uint hash_cell(ivec3 cell) {\n"
+"    uint gs = self_collision_grid_size;\n"
+"    if (cell.x < 0 || cell.y < 0 || cell.z < 0) return 0xFFFFFFFFu;\n"
+"    if (uint(cell.x) >= gs || uint(cell.y) >= gs || uint(cell.z) >= gs) return 0xFFFFFFFFu;\n"
+"    return uint(cell.x) + uint(cell.y) * gs + uint(cell.z) * gs * gs;\n"
+"}\n"
+"\n"
+"void main() {\n"
+"    uint idx = gl_GlobalInvocationID.x;\n"
+"    if (idx >= num_vertices) return;\n"
+"\n"
+"    float inv_mass = positions[idx].w;\n"
+"    if (inv_mass <= 0.0) return;\n"
+"\n"
+"    vec3 p = predicted[idx].xyz;\n"
+"    float cell_size = cloth_thickness * 2.0;\n"
+"    ivec3 my_cell = ivec3(floor(p / cell_size)) + ivec3(int(self_collision_grid_size) / 2);\n"
+"\n"
+"    vec3 correction = vec3(0.0);\n"
+"    int num_corrections = 0;\n"
+"\n"
+"    // Search 3x3x3 neighborhood\n"
+"    for (int dz = -1; dz <= 1; dz++) {\n"
+"    for (int dy = -1; dy <= 1; dy++) {\n"
+"    for (int dx = -1; dx <= 1; dx++) {\n"
+"        ivec3 cell = my_cell + ivec3(dx, dy, dz);\n"
+"        uint h = hash_cell(cell);\n"
+"        if (h == 0xFFFFFFFFu) continue;\n"
+"\n"
+"        uint j = grid_heads[h];\n"
+"        while (j != 0xFFFFFFFFu) {\n"
+"            if (j != idx) {\n"
+"                // Skip topologically adjacent vertices (within 2 hops in grid)\n"
+"                // Simple approximation: skip if index difference < grid_width*2\n"
+"                int idx_diff = abs(int(j) - int(idx));\n"
+"                if (idx_diff > 2 && idx_diff != int(grid_width) && idx_diff != int(grid_width) + 1 && idx_diff != int(grid_width) - 1) {\n"
+"                    vec3 pj = predicted[j].xyz;\n"
+"                    vec3 diff = p - pj;\n"
+"                    float dist = length(diff);\n"
+"\n"
+"                    if (dist < cloth_thickness && dist > 1e-7) {\n"
+"                        // Push apart to thickness distance\n"
+"                        vec3 dir = diff / dist;\n"
+"                        float overlap = cloth_thickness - dist;\n"
+"                        correction += dir * overlap * 0.5;\n"
+"                        num_corrections++;\n"
+"                    }\n"
+"                }\n"
+"            }\n"
+"            j = grid_next[j];\n"
+"        }\n"
+"    }}}\n"
+"\n"
+"    if (num_corrections > 0) {\n"
+"        predicted[idx] = vec4(p + correction / float(num_corrections), 0.0);\n"
+"    }\n"
 "}\n"
 ;

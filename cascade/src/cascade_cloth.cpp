@@ -64,6 +64,11 @@ void CascadeCloth::_bind_methods() {
 
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "source_mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh"), "set_source_mesh", "get_source_mesh");
 
+    ClassDB::bind_method(D_METHOD("set_skeleton_path", "path"), &CascadeCloth::set_skeleton_path);
+    ClassDB::bind_method(D_METHOD("get_skeleton_path"), &CascadeCloth::get_skeleton_path);
+    ClassDB::bind_method(D_METHOD("bind_vertex_to_bone", "vertex_index", "bone_index"), &CascadeCloth::bind_vertex_to_bone);
+    ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "skeleton_path"), "set_skeleton_path", "get_skeleton_path");
+
     ADD_GROUP("Cloth", "cloth_");
     ADD_PROPERTY(PropertyInfo(Variant::INT, "cloth_width", PROPERTY_HINT_RANGE, "4,128,1"), "set_width", "get_width");
     ADD_PROPERTY(PropertyInfo(Variant::INT, "cloth_height", PROPERTY_HINT_RANGE, "4,128,1"), "set_height", "get_height");
@@ -128,6 +133,14 @@ void CascadeCloth::pin_vertices_above(float y_threshold) {
     pinned_vertices.clear(); // will be populated in _init_gpu
 }
 
+void CascadeCloth::set_skeleton_path(NodePath p_path) { skeleton_path = p_path; }
+NodePath CascadeCloth::get_skeleton_path() const { return skeleton_path; }
+
+void CascadeCloth::bind_vertex_to_bone(int vertex_index, int bone_index) {
+    bone_bindings.push_back({(uint32_t)vertex_index, bone_index});
+    pinned_vertices.push_back((uint32_t)vertex_index);
+}
+
 void CascadeCloth::add_sphere_collider(Vector3 center, float radius) {
     sphere_colliders.push_back({(float)center.x, (float)center.y, (float)center.z, radius});
     colliders_dirty = true;
@@ -155,8 +168,38 @@ void CascadeCloth::_ready() {
 void CascadeCloth::_process(double delta) {
     if (!simulate || !gpu_initialized) return;
 
-    float dt = 1.0f / 60.0f; // fixed timestep for solver stability
+    float dt = 1.0f / 60.0f;
     sim_time += dt;
+
+    // Resolve skeleton if path is set
+    if (!skeleton && !skeleton_path.is_empty()) {
+        skeleton = Object::cast_to<Skeleton3D>(get_node_or_null(skeleton_path));
+    }
+
+    // Update bone-bound vertex positions from skeleton
+    if (skeleton && !bone_bindings.empty()) {
+        PackedByteArray pos_bytes = local_rd->buffer_get_data(positions_buf);
+        float *pos = reinterpret_cast<float *>(pos_bytes.ptrw());
+        bool updated = false;
+
+        for (auto &bb : bone_bindings) {
+            if (bb.bone_index >= 0 && bb.bone_index < skeleton->get_bone_count()) {
+                Transform3D bone_xform = skeleton->get_bone_global_pose(bb.bone_index);
+                // Combine with cloth node's inverse transform to get local position
+                Transform3D local_xform = get_global_transform().affine_inverse() * skeleton->get_global_transform() * bone_xform;
+                int base = bb.vertex_index * 4;
+                pos[base + 0] = local_xform.origin.x;
+                pos[base + 1] = local_xform.origin.y;
+                pos[base + 2] = local_xform.origin.z;
+                pos[base + 3] = 0.0f; // keep pinned
+                updated = true;
+            }
+        }
+
+        if (updated) {
+            local_rd->buffer_update(positions_buf, 0, pos_bytes.size(), pos_bytes);
+        }
+    }
 
     if (colliders_dirty) _upload_colliders();
     _simulate_step(dt);
@@ -231,8 +274,8 @@ void CascadeCloth::_update_params(float dt, uint32_t con_offset, uint32_t con_co
     wf(60, wind_turbulence);
     wf(64, sim_time);
     wf(68, friction);
-    wf(72, 0.0f);
-    wf(76, 0.0f);
+    wf(72, cloth_thickness);
+    wu(76, sc_grid_size);
 
     local_rd->buffer_update(params_buf, 0, 80, p);
 }
@@ -559,6 +602,42 @@ void CascadeCloth::_init_gpu() {
         {0, positions_buf}, {4, params_buf}, {5, normals_buf}
     });
 
+    // ---- Self-collision grid ----
+    sc_grid_size = 32;
+    sc_grid_total = sc_grid_size * sc_grid_size * sc_grid_size;
+    cloth_thickness = cloth_spacing * 0.3f;
+
+    PackedByteArray sc_heads_data;
+    sc_heads_data.resize(sc_grid_total * sizeof(uint32_t));
+    memset(sc_heads_data.ptrw(), 0xFF, sc_heads_data.size());
+    sc_grid_heads_buf = local_rd->storage_buffer_create(sc_grid_total * sizeof(uint32_t), sc_heads_data);
+
+    PackedByteArray sc_next_data;
+    sc_next_data.resize(vertex_count * sizeof(uint32_t));
+    memset(sc_next_data.ptrw(), 0xFF, sc_next_data.size());
+    sc_grid_next_buf = local_rd->storage_buffer_create(vertex_count * sizeof(uint32_t), sc_next_data);
+
+    sc_clear_shader = _compile_shader(CLOTH_SC_CLEAR_GRID_SHADER);
+    sc_build_shader = _compile_shader(CLOTH_SC_BUILD_GRID_SHADER);
+    sc_resolve_shader = _compile_shader(CLOTH_SC_RESOLVE_SHADER);
+
+    if (sc_clear_shader.is_valid() && sc_build_shader.is_valid() && sc_resolve_shader.is_valid()) {
+        sc_clear_pipeline = local_rd->compute_pipeline_create(sc_clear_shader);
+        sc_build_pipeline = local_rd->compute_pipeline_create(sc_build_shader);
+        sc_resolve_pipeline = local_rd->compute_pipeline_create(sc_resolve_shader);
+
+        sc_clear_uset = _make_uniform_set(sc_clear_shader, {
+            {4, params_buf}, {8, sc_grid_heads_buf}
+        });
+        sc_build_uset = _make_uniform_set(sc_build_shader, {
+            {1, predicted_buf}, {4, params_buf}, {8, sc_grid_heads_buf}, {9, sc_grid_next_buf}
+        });
+        sc_resolve_uset = _make_uniform_set(sc_resolve_shader, {
+            {0, positions_buf}, {1, predicted_buf}, {4, params_buf}, {8, sc_grid_heads_buf}, {9, sc_grid_next_buf}
+        });
+        UtilityFunctions::print("[Cascade] Self-collision grid: ", (int)sc_grid_size, "^3 = ", (int)sc_grid_total, " cells");
+    }
+
     gpu_initialized = true;
     UtilityFunctions::print("[Cascade] GPU XPBD cloth initialized.");
 }
@@ -650,13 +729,44 @@ void CascadeCloth::_simulate_step(float dt) {
     }
 
     // ----------------------------------------------------------------
-    // Pass 3: Collision + update + normals (single compute list, 1 submit)
+    // Pass 2.5: Self-collision (spatial hash grid)
+    // ----------------------------------------------------------------
+    if (sc_clear_pipeline.is_valid()) {
+        _update_params(dt, 0, 0);
+        uint32_t sc_gg = (sc_grid_total + 63) / 64;
+
+        cl = local_rd->compute_list_begin();
+        // Clear grid
+        local_rd->compute_list_bind_compute_pipeline(cl, sc_clear_pipeline);
+        local_rd->compute_list_bind_uniform_set(cl, sc_clear_uset, 0);
+        local_rd->compute_list_dispatch(cl, sc_gg, 1, 1);
+        local_rd->compute_list_add_barrier(cl);
+
+        // Build grid
+        local_rd->compute_list_bind_compute_pipeline(cl, sc_build_pipeline);
+        local_rd->compute_list_bind_uniform_set(cl, sc_build_uset, 0);
+        local_rd->compute_list_dispatch(cl, vg, 1, 1);
+        local_rd->compute_list_add_barrier(cl);
+
+        // Resolve collisions
+        local_rd->compute_list_bind_compute_pipeline(cl, sc_resolve_pipeline);
+        local_rd->compute_list_bind_uniform_set(cl, sc_resolve_uset, 0);
+        local_rd->compute_list_dispatch(cl, vg, 1, 1);
+        local_rd->compute_list_add_barrier(cl);
+
+        local_rd->compute_list_end();
+        local_rd->submit();
+        local_rd->sync();
+    }
+
+    // ----------------------------------------------------------------
+    // Pass 3: External collision + update + normals
     // ----------------------------------------------------------------
     _update_params(dt, 0, 0);
 
     cl = local_rd->compute_list_begin();
 
-    // Collision
+    // External collision
     local_rd->compute_list_bind_compute_pipeline(cl, collide_pipeline);
     local_rd->compute_list_bind_uniform_set(cl, collide_uset, 0);
     local_rd->compute_list_dispatch(cl, vg, 1, 1);
