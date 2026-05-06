@@ -1,0 +1,132 @@
+[gd_scene load_steps=6 format=3]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.04, 0.04, 0.07, 1)
+ambient_light_source = 1
+ambient_light_color = Color(0.5, 0.5, 0.6, 1)
+ambient_light_energy = 0.8
+tonemap_mode = 2
+
+[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_1"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(20, 20)
+
+[sub_resource type="StandardMaterial3D" id="Material_ground"]
+albedo_color = Color(0.15, 0.15, 0.18, 1)
+roughness = 0.9
+
+[sub_resource type="GDScript" id="GDScript_test"]
+script/source = "extends Node3D
+
+var fracture_node = null
+var cloth_node = null
+var damage_applied := false
+var elapsed := 0.0
+var piece_count := 0
+
+func _ready():
+	print(\"=== Cascade Fracture Test Scene ===\")
+
+	# -- CascadeFracture box at (0, 2, 0) --
+	fracture_node = ClassDB.instantiate(&\"CascadeFracture\")
+	if fracture_node:
+		fracture_node.position = Vector3(0, 2, 0)
+		fracture_node.set_mesh(_make_box_mesh())
+		fracture_node.num_pieces = 12
+		fracture_node.fracture_seed = 77
+		var mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.85, 0.25, 0.1)
+		mat.roughness = 0.4
+		mat.metallic = 0.1
+		fracture_node.material_override = mat
+		add_child(fracture_node)
+		# Pre-fracture immediately so pieces are computed
+		fracture_node.fracture()
+		print(\"  Fracture box ready -- will shatter in 2 seconds\")
+	else:
+		printerr(\"  Failed to instantiate CascadeFracture\")
+
+	# -- CascadeCloth hanging nearby --
+	cloth_node = ClassDB.instantiate(&\"CascadeCloth\")
+	if cloth_node:
+		cloth_node.position = Vector3(3.0, 2.5, 0)
+		cloth_node.cloth_width = 24
+		cloth_node.cloth_height = 24
+		cloth_node.cloth_spacing = 0.06
+		cloth_node.cloth_pin_mode = 0
+		cloth_node.solver_iterations = 8
+		cloth_node.solver_bend_compliance = 0.002
+		cloth_node.wind = Vector3(1.5, 0, 0.8)
+		cloth_node.wind_turbulence = 0.25
+		cloth_node.add_plane_collider(Vector3(0, 1, 0), 0.0)
+		var cmat = StandardMaterial3D.new()
+		cmat.albedo_color = Color(0.2, 0.55, 0.9)
+		cmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		cloth_node.material_override = cmat
+		add_child(cloth_node)
+		cloth_node.simulate = true
+		print(\"  Cloth hanging at (3, 2.5, 0)\")
+	else:
+		printerr(\"  Failed to instantiate CascadeCloth\")
+
+	# Point camera at the scene center
+	$Camera3D.look_at(Vector3(1.5, 1.5, 0), Vector3.UP)
+
+func _make_box_mesh() -> BoxMesh:
+	var bm = BoxMesh.new()
+	bm.size = Vector3(1, 1, 1)
+	return bm
+
+func _process(delta):
+	elapsed += delta
+
+	# After 2 seconds, apply damage to shatter the box
+	if not damage_applied and elapsed >= 2.0 and fracture_node:
+		print(\"  Applying damage at (0, 2, 0) radius=5.0 force=3.0\")
+		fracture_node.apply_damage(Vector3(0, 2, 0), 5.0, 3.0)
+		damage_applied = true
+
+	# Count debris pieces (RigidBody3D children with cascade meta)
+	piece_count = 0
+	for child in get_children():
+		if child is RigidBody3D and child.has_meta(\"_cascade_debris\"):
+			piece_count += 1
+
+	# Print FPS and piece count every 60 frames
+	if Engine.get_frames_drawn() % 60 == 0:
+		print(\"FPS: \", Engine.get_frames_per_second(), \"  |  Debris pieces: \", piece_count)
+"
+
+[node name="TestScene" type="Node3D"]
+script = SubResource("GDScript_test")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2.5, 0)
+current = true
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="GroundCollision" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("WorldBoundaryShape3D_1")
+
+[node name="GroundMesh" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("PlaneMesh_ground")
+surface_material_override/0 = SubResource("Material_ground")
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.433, 0.25, 0, 0.5, 0.866, -0.5, -0.75, 0.433, 2, 5, 2)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0.433, -0.25, 0, 0.5, 0.866, 0.5, -0.75, 0.433, -3, 4, -2)
+light_energy = 0.4
+
+[node name="BackLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, -0.866, 0, 0.866, 0.5, 0, -2, -3)
+light_energy = 0.2

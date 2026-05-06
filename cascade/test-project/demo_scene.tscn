@@ -1,0 +1,159 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.04, 0.04, 0.07, 1)
+ambient_light_source = 1
+ambient_light_color = Color(0.45, 0.45, 0.55, 1)
+ambient_light_energy = 0.9
+tonemap_mode = 2
+glow_enabled = true
+glow_intensity = 0.3
+
+[sub_resource type="GDScript" id="GDScript_demo"]
+script/source = "extends Node3D
+
+var fracture_node = null
+var damage_timer := 0.0
+var damage_done := false
+
+func _ready():
+	print(\"\\n========================================\")
+	print(\"  CASCADE PHYSICS ENGINE DEMO\")
+	print(\"  Cloth + Fluid + Fracture\")
+	print(\"========================================\\n\")
+
+	_setup_cloth()
+	_setup_fluid()
+	_setup_fracture()
+	_setup_ground()
+
+func _setup_cloth():
+	var cloth = ClassDB.instantiate(&\"CascadeCloth\")
+	if not cloth: return
+	cloth.position = Vector3(-2.5, 2.0, 0)
+	cloth.cloth_width = 36
+	cloth.cloth_height = 28
+	cloth.cloth_spacing = 0.065
+	cloth.cloth_pin_mode = 0
+	cloth.solver_iterations = 10
+	cloth.solver_bend_compliance = 0.002
+	cloth.wind = Vector3(2.0, 0, 1.0)
+	cloth.wind_turbulence = 0.3
+	cloth.add_plane_collider(Vector3(0, 1, 0), 0.05)
+	cloth.add_sphere_collider(Vector3(-2.5, 0.8, 0), 0.4)
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.85, 0.15, 0.1)
+	mat.roughness = 0.6
+	cloth.material_override = mat
+	add_child(cloth)
+	cloth.simulate = true
+	# Visible sphere to see draping
+	var sphere_vis = MeshInstance3D.new()
+	var sm = SphereMesh.new()
+	sm.radius = 0.4
+	sm.height = 0.8
+	sphere_vis.mesh = sm
+	sphere_vis.position = Vector3(-2.5, 0.8, 0)
+	var smat = StandardMaterial3D.new()
+	smat.albedo_color = Color(0.3, 0.3, 0.35)
+	smat.metallic = 0.5
+	sphere_vis.material_override = smat
+	add_child(sphere_vis)
+	print(\"  [Cloth] Red curtain 36x28, wind, sphere collider\")
+
+func _setup_fluid():
+	var fluid = ClassDB.instantiate(&\"CascadeFluid\")
+	if not fluid: return
+	fluid.position = Vector3(0, 0, 0)
+	fluid.num_particles = 3000
+	fluid.smoothing_radius = 0.1
+	fluid.rest_density = 1000.0
+	fluid.viscosity_coeff = 0.08
+	fluid.particle_radius = 0.025
+	fluid.bounds_min = Vector3(-0.8, -0.05, -0.8)
+	fluid.bounds_max = Vector3(0.8, 3.0, 0.8)
+	var fmat = StandardMaterial3D.new()
+	fmat.albedo_color = Color(0.1, 0.3, 0.85)
+	fmat.metallic = 0.4
+	fmat.roughness = 0.15
+	fluid.material_override = fmat
+	add_child(fluid)
+	fluid.simulate = true
+	print(\"  [Fluid] 3000 SPH particles, center\")
+
+func _setup_fracture():
+	fracture_node = ClassDB.instantiate(&\"CascadeFracture\")
+	if not fracture_node: return
+	fracture_node.position = Vector3(2.5, 1.5, 0)
+	var bm = BoxMesh.new()
+	bm.size = Vector3(1.2, 1.2, 1.2)
+	fracture_node.set_mesh(bm)
+	fracture_node.num_pieces = 16
+	fracture_node.fracture_seed = 42
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.9, 0.7, 0.15)
+	mat.roughness = 0.3
+	mat.metallic = 0.2
+	fracture_node.material_override = mat
+	add_child(fracture_node)
+	fracture_node.fracture()
+	print(\"  [Fracture] Gold box, 16 pieces, shatters in 3s\")
+
+func _setup_ground():
+	var ground = StaticBody3D.new()
+	var col = CollisionShape3D.new()
+	var shape = WorldBoundaryShape3D.new()
+	col.shape = shape
+	ground.add_child(col)
+	var mesh = MeshInstance3D.new()
+	var pm = PlaneMesh.new()
+	pm.size = Vector2(20, 20)
+	mesh.mesh = pm
+	var gmat = StandardMaterial3D.new()
+	gmat.albedo_color = Color(0.12, 0.12, 0.15)
+	gmat.roughness = 0.9
+	mesh.material_override = gmat
+	ground.add_child(mesh)
+	add_child(ground)
+
+func _process(delta):
+	damage_timer += delta
+
+	# Shatter fracture box after 3 seconds
+	if not damage_done and damage_timer >= 3.0 and fracture_node:
+		print(\"  [Fracture] BOOM!\")
+		fracture_node.apply_damage(fracture_node.global_position, 3.0, 5.0)
+		damage_done = true
+
+	# Orbit camera
+	var t = Time.get_ticks_msec() * 0.00015
+	$Camera3D.position = Vector3(sin(t) * 7, 2.5, cos(t) * 7)
+	$Camera3D.look_at(Vector3(0, 0.8, 0))
+
+	if Engine.get_frames_drawn() % 300 == 0:
+		print(\"  FPS: \", Engine.get_frames_per_second())
+"
+
+[node name="Demo" type="Node3D"]
+script = SubResource("GDScript_demo")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.5, 7)
+current = true
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.433, 0.25, 0, 0.5, 0.866, -0.5, -0.75, 0.433, 3, 6, 3)
+light_energy = 1.3
+shadow_enabled = true
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0.433, -0.25, 0, 0.5, 0.866, 0.5, -0.75, 0.433, -3, 4, -2)
+light_energy = 0.4
+
+[node name="RimLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, -0.866, 0, 0.866, 0.5, 0, 3, -4)
+light_energy = 0.25

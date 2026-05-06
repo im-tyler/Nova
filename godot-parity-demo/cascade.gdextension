@@ -1,0 +1,9 @@
+[configuration]
+
+entry_symbol = "cascade_library_init"
+compatibility_minimum = "4.2"
+
+[libraries]
+
+macos.debug = "res://bin/libcascade.macos.template_debug.universal.dylib"
+macos.release = "res://bin/libcascade.macos.template_debug.universal.dylib"
