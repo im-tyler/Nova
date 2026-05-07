@@ -14,7 +14,7 @@ Per-subsystem extras:
 
 - **cascade / tempest**: nothing beyond the above; godot-cpp is cloned at build time.
 - **aurora**: requires the NVIDIA RTX Godot fork (https://github.com/NVIDIA-RTX/godot). Aurora is research-stage — there is no buildable artifact yet.
-- **meridian**: lives in its own repo (http://100.108.123.49:49152/Tyler/meridian.git). Vulkan SDK 1.2+ required for the standalone prototype. See meridian's own README.
+- **meridian**: lives in its own repo (https://github.com/im-tyler/meridian.git). Vulkan SDK 1.2+ required for the standalone prototype. See meridian's own README.
 
 ## Building
 

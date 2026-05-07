@@ -8,7 +8,7 @@ This repository is the umbrella — the planning hub plus a unified showcase pro
 
 | Codename | Role | Status | Type | Coupling |
 |----------|------|--------|------|----------|
-| **meridian** | Dense / virtualized geometry renderer (Nanite-class) | working (Phase 2 in progress) | C++ standalone Vulkan + Godot importer | Lives in [its own repo](http://100.108.123.49:49152/Tyler/meridian.git) — not vendored here |
+| **meridian** | Dense / virtualized geometry renderer (Nanite-class) | working (Phase 2 in progress) | C++ standalone Vulkan + Godot importer | Lives in [its own repo](https://github.com/im-tyler/meridian.git) — not vendored here |
 | **aurora** | Path-traced GI + hybrid fallback (Lumen-class) | research-only | Built on the [NVIDIA RTX Godot fork](https://github.com/NVIDIA-RTX/godot) | Foundation cloned into `aurora/nvidia-godot-rtx/` (gitignored) |
 | **cascade** | GPU physics — XPBD cloth, SPH fluid, Voronoi fracture | working (prototype) | C++ GDExtension (godot-cpp + RenderingDevice compute) | Standalone — depends on godot-cpp |
 | **tempest** | GPU particles / VFX (Niagara-class) | working (prototype) | C++ GDExtension | Shares particle buffer format with cascade (planned) |
@@ -115,7 +115,7 @@ aurora/             research notes + path to NVIDIA fork
 cascade/            cascade/ (gdextension), test-project/, blast-research/
 godot-parity-demo/  unified showcase Godot project
 kinetic/            kinetic-plugin/ (addon), reference/, test-data/
-meridian/           SEPARATE REPO — see http://100.108.123.49:49152/Tyler/meridian.git
+meridian/           SEPARATE REPO — see https://github.com/im-tyler/meridian.git
 resonance/          resonance-plugin/, labsound-research/, steam-audio-test/
 scatter/            scatter-plugin/, test-project/
 tempest/            tempest/ (gdextension), test-project/

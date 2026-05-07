@@ -1,0 +1,3 @@
+[submodule "meridian"]
+	path = meridian
+	url = https://github.com/im-tyler/meridian.git
