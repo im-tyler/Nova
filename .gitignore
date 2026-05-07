@@ -2,11 +2,14 @@
 .DS_Store
 ._*
 nul
+Thumbs.db
 
 # Editors
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
 
 # Godot — build artifacts and per-machine state
 .godot/
@@ -19,18 +22,26 @@ export.cfg
 export_presets.cfg
 *.exe
 *.pck
+*.uid
 
 # Build outputs
 bin/
 build/
+dist/
 
 # C/C++ / SCons
 *.o
+*.os
 *.a
 *.dylib
 *.so
 *.dll
+*.lib
+*.obj
+*.pdb
 .sconsign.dblite
+.sconf_temp/
+config.log
 
 # Python
 __pycache__/
@@ -41,17 +52,22 @@ venv/
 # Env
 .env
 .env.local
+.env.*.local
 
 # Logs
 *.log
 logs/
 
 # Local CC settings
-.claude/settings.local.json
 .claude/
+_internal/
 
 # Separately-tracked subprojects (own Forgejo repos / vendored upstreams)
 meridian/                                # tyler/meridian — separate Forgejo repo
 aurora/nvidia-godot-rtx/                 # vendored upstream (NVIDIA-RTX/godot)
 cascade/blast-research/Blast/            # vendored upstream (NVIDIAGameWorks/Blast)
 cascade/cascade/godot-cpp/               # vendored upstream (godotengine/godot-cpp)
+tempest/tempest/godot-cpp                # symlink to cascade/cascade/godot-cpp
+
+# NOTE: _pre-consolidation/ folders ARE tracked — they preserve the original
+# planning docs that were collapsed into each subsystem's consolidated README.

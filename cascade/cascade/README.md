@@ -19,8 +19,8 @@ Part of the Godot-Unreal Parity Initiative.
 Requires: SCons, a C++ compiler with C++17 support, Python 3.
 
 ```bash
-cd /Users/tyler/Documents/physics-sim/cascade
-git submodule update --init godot-cpp
+cd cascade/cascade
+git clone --depth 1 https://github.com/godotengine/godot-cpp.git
 cd godot-cpp && scons platform=macos target=template_debug -j10 && cd ..
 scons platform=macos target=template_debug -j10
 ```

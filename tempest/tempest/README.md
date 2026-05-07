@@ -12,11 +12,13 @@ Part of the Godot-Unreal Parity Initiative.
 
 ## Build
 
-Requires: SCons, a C++ compiler with C++17 support, Python 3. Tempest symlinks to Cascade's godot-cpp checkout.
+Requires: SCons, a C++ compiler with C++17 support, Python 3. Tempest reuses Cascade's godot-cpp checkout via a relative symlink.
 
 ```bash
-cd /Users/tyler/Documents/vfx/tempest
-# godot-cpp is a symlink to ../physics-sim/cascade/godot-cpp — ensure it is built:
+cd tempest/tempest
+# Re-create the godot-cpp symlink if needed (points at Cascade's checkout):
+ln -sf ../../cascade/cascade/godot-cpp godot-cpp
+# Make sure godot-cpp is built (Cascade's instructions cover this):
 cd godot-cpp && scons platform=macos target=template_debug -j10 && cd ..
 scons platform=macos target=template_debug -j10
 ```

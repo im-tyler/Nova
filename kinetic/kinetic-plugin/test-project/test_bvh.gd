@@ -10,7 +10,6 @@ func _ready() -> void:
 	var candidates: PackedStringArray = PackedStringArray()
 	if bvh_path != "":
 		candidates.append(bvh_path)
-	candidates.append("/Users/tyler/Documents/animation/test-data/walk.bvh")
 	var project_dir := ProjectSettings.globalize_path("res://")
 	candidates.append(project_dir.path_join("../../test-data/walk.bvh"))
 
