@@ -63,7 +63,6 @@ logs/
 _internal/
 
 # Separately-tracked subprojects (own Forgejo repos / vendored upstreams)
-meridian/                                # tyler/meridian — separate Forgejo repo
 aurora/nvidia-godot-rtx/                 # vendored upstream (NVIDIA-RTX/godot)
 cascade/blast-research/Blast/            # vendored upstream (NVIDIAGameWorks/Blast)
 cascade/cascade/godot-cpp/               # vendored upstream (godotengine/godot-cpp)
